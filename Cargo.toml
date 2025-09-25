@@ -1,0 +1,7 @@
+[workspace]
+members = [
+    "chat_bin",
+    "chat_lib",
+]
+resolver = "3"
+
