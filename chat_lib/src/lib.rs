@@ -4,7 +4,7 @@ pub fn add(left: u64, right: u64) -> u64 {
 
 pub mod settings;
 pub mod terminal;
-pub mod net;
+pub mod chat;
 
 #[cfg(test)]
 mod tests {
