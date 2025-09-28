@@ -1,10 +1,10 @@
-use std::{io, net::SocketAddr, time::Duration};
+use std::{fmt::Alignment, io, net::SocketAddr, time::Duration};
 
 use config::Config;
 use log::{debug, info};
 use rumqttc::{EventLoop, Incoming, AsyncClient, MqttOptions, NetworkOptions, QoS};
 use tokio::{net::{self}, task, time};
-use chat_lib::net::Message;
+use chat_lib::chat::Message;
 
 pub async fn mqtt_connect(config: Config) -> ! {
     let mqtt_server_address = config.get_string("mqtt_server_address").unwrap();
@@ -84,8 +84,13 @@ async fn mqtt_eventloop(mut eventloop: EventLoop) {
             }
         };
 
-        println!("message: {}", message);
-
+        match message.chat_print(chat_lib::chat::ChatAlignment::Right) {
+            Ok(_) => (),
+            Err(e) => {
+                println!("{:?}", e);
+                continue;
+            },
+        }
     }
 }
 
@@ -93,6 +98,7 @@ async fn mqtt_client(client: AsyncClient) {
     loop {
         println!("test client");
         let message = Message::new("test".to_string(), "tt".to_string());
+
         let encoded_message = bincode::encode_to_vec(message, bincode::config::standard()).unwrap();
         client.publish("chat/1", rumqttc::QoS::AtMostOnce, false, encoded_message).await.unwrap();
         tokio::time::sleep(Duration::from_secs(5)).await;
