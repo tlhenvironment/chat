@@ -2,11 +2,12 @@ use std::{fmt::Alignment, io, net::SocketAddr, time::Duration};
 
 use config::Config;
 use log::{debug, info};
-use rumqttc::{EventLoop, Incoming, AsyncClient, MqttOptions, NetworkOptions, QoS};
-use tokio::{net::{self}, sync::mpsc::Sender, task, time};
+use rumqttc::{tokio_rustls::rustls::crypto::cipher::MessageEncrypter, AsyncClient, EventLoop, Incoming, MqttOptions, NetworkOptions, QoS};
+use tokio::{net::{self}, sync::mpsc::{Receiver, Sender}, task, time};
 use chat_lib::chat::{FullMessage, Message};
 
-pub async fn mqtt_connect(config: Config, tx: Sender<FullMessage>) -> ! {
+pub async fn mqtt_connect(config: Config, tx: Sender<FullMessage>, rx: Receiver<Message>,
+        random_hash_state: String) -> ! {
     let mqtt_server_address = config.get_string("mqtt_server_address").unwrap();
     let mqtt_server_port = config.get_int("mqtt_server_port").unwrap() as u16;
     let mqtt_server = format!("{}:{}", mqtt_server_address, mqtt_server_port);
@@ -29,7 +30,7 @@ pub async fn mqtt_connect(config: Config, tx: Sender<FullMessage>) -> ! {
         // println!("result: {:?}", socket_addrs);
 
         //connect to mqtt
-        let mut mqttoptions = MqttOptions::new("chat", &mqtt_server_address, mqtt_server_port);
+        let mut mqttoptions = MqttOptions::new(random_hash_state, &mqtt_server_address, mqtt_server_port);
         mqttoptions.set_keep_alive(Duration::from_secs(5));
 
         let (mut client, mut eventloop) = AsyncClient::new(mqttoptions, 10);
@@ -41,9 +42,9 @@ pub async fn mqtt_connect(config: Config, tx: Sender<FullMessage>) -> ! {
         });
 
         task::spawn(async move {
-            mqtt_client(client).await;
+            mqtt_client(client, rx).await;
         });
-        
+
         loop {
             tokio::time::sleep(Duration::from_secs(5)).await;
         }
@@ -84,7 +85,7 @@ async fn mqtt_eventloop(mut eventloop: EventLoop, tx: Sender<FullMessage>) {
             }
         };
 
-        let full_message = FullMessage::new(message, chat_lib::chat::ChatAlignment::Right);
+        let full_message = FullMessage::new(message, chat_lib::chat::ChatAlignment::Left);
 
         tx.send(full_message).await.unwrap();
 
@@ -98,13 +99,19 @@ async fn mqtt_eventloop(mut eventloop: EventLoop, tx: Sender<FullMessage>) {
     }
 }
 
-async fn mqtt_client(client: AsyncClient) {
+async fn mqtt_client(client: AsyncClient, mut rx: Receiver<Message>) {
     loop {
-        println!("test client");
-        let message = Message::new("test".to_string(), "tt".to_string());
-
+        let message = rx.recv().await.unwrap();
         let encoded_message = bincode::encode_to_vec(message, bincode::config::standard()).unwrap();
+
         client.publish("chat/1", rumqttc::QoS::AtMostOnce, false, encoded_message).await.unwrap();
-        tokio::time::sleep(Duration::from_secs(5)).await;
+
+        // println!("test client");
+        // let message = Message::new("test".to_string(), "tt".to_string());
+
+        // let encoded_message = bincode::encode_to_vec(message, bincode::config::standard()).unwrap();
+        // client.publish("chat/1", rumqttc::QoS::AtMostOnce, false, encoded_message).await.unwrap();
+        // tokio::time::sleep(Duration::from_secs(5)).await;
     }
 }
+
