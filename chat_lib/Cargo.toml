@@ -5,6 +5,7 @@ edition = "2024"
 
 [dependencies]
 bincode = { version = "2.0.1", features = ["serde"] }
+rand = "0.9.2"
 serde = { version = "1.0.225", features = ["serde_derive"] }
 term_size = "0.3.2"
 tokio = { version = "1.47.1", features = ["full"] }

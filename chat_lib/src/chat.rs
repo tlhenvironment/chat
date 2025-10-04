@@ -5,26 +5,55 @@ use serde::{Deserialize, Serialize};
 
 use crate::{chat, terminal::TermError};
 
+#[derive(PartialEq)]
 pub enum ChatAlignment {
     Right,
     Left,
 }
 
-#[derive(Debug, Decode, Encode)]
+#[derive(Debug, Decode, Encode, Clone)]
 pub struct Message {
     sender: String,
     text: String,
+    random_hash: String,
 }
 
+
 impl Message {
-    pub fn new(sender: String, text: String) -> Self {
+    pub fn new(sender: String, text: String, random_hash: String) -> Self {
         Message {
             sender,
             text,
+            random_hash,
+        }
+    }
+    pub fn get_random_hash(&self) -> &String {
+        &self.random_hash
+    }
+}
+
+pub struct FullMessage {
+    message: Message,
+    alignment: ChatAlignment,
+}
+
+impl FullMessage {
+    pub fn new(messsage: Message, alignment: ChatAlignment) -> Self {
+        Self {
+            message: messsage,
+            alignment,
         }
     }
 
-    pub fn chat_print(&self, alignment: ChatAlignment) -> Result<(), TermError> {
+    pub fn get_message(&self) -> &Message {
+        &self.message
+    }
+
+    pub fn get_alingment(&self) -> &ChatAlignment {
+        &self.alignment
+    }
+
+  pub fn chat_print(&self) -> Result<(), TermError> {
         let (width, _) = match term_size::dimensions() {
             Some((w,h)) => (w,h),
             None => {
@@ -32,20 +61,21 @@ impl Message {
             },
         };
 
-        match alignment {
+        match self.alignment {
             ChatAlignment::Left => {
-                println!("{:<width$}", self.sender, width = width);
-                println!("\t{:<width$}", self.text, width = width);
+                println!("{:<width$}", self.message.sender, width = width);
+                println!("\t{:<width$}", self.message.text, width = width);
             },
             ChatAlignment::Right => {
-                println!("{:>width$}", self.sender, width = width);
-                println!("{:>width$}", self.text, width = width - 4);
+                println!("{:>width$}", self.message.sender, width = width);
+                println!("{:>width$}", self.message.text, width = width - 4);
             },
         }
         io::stdout().flush().unwrap(); // Ensure the message is printed immediately
 
         Ok(())
     }
+
 }
 
 // Implementing the Display trait for Message
@@ -55,3 +85,6 @@ impl core::fmt::Display for Message {
     }
 }
 
+pub async fn write_loop() {
+
+}
