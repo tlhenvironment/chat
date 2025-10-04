@@ -1,11 +1,14 @@
+use chat_lib::chat::FullMessage;
 use config::Config;
 use chat_lib::{chat::Message, settings::Settings};
-use chat_lib::terminal::{capture_user_input, clear_terminal};
+use chat_lib::terminal::{capture_user_input, clear_terminal, print_messages, startup_message};
 use env_logger::Builder;
 use log::info;
 use tokio::io::{self, AsyncBufReadExt as _, BufReader};
 use std::fmt::Alignment;
+use std::sync::mpsc::{Receiver, Sender};
 use std::{env, thread, time::{self, Duration}};
+use tokio::sync::mpsc;
 
 use crate::net::{mqtt_connect};
 
@@ -21,34 +24,39 @@ async fn main() {
         .build()
         .unwrap();
 
+    let username = settings.get_string("username").unwrap();
+
     //test
-    let t = Message::new("lollo".to_string(), "aweweggwe".to_string());
-    t.chat_print(chat_lib::chat::ChatAlignment::Left).unwrap();
-    t.chat_print(chat_lib::chat::ChatAlignment::Right).unwrap();
-
-
-
-    // tokio::time::sleep(Duration::from_secs(100)).await;
-
     //give output
-    println!("--------------- Chat application ---------------");
-    println!("\n \n");
+
+    //make channel to communicate between the task that prints
+    //and the tasks that receive messages
+    let (tx, mut rx) = mpsc::channel::<FullMessage>(16);
+
+    startup_message().await;
     
+    let tx_mqtt = tx.clone();
+    let tx_input = tx.clone();
+ 
     // //wait a bit to clear
-    tokio::time::sleep(Duration::from_secs(5)).await;
+    tokio::time::sleep(Duration::from_secs(3)).await;
     clear_terminal();
     tokio::time::sleep(Duration::from_secs(1)).await;
 
-    //connect to MQTT server
-    tokio::spawn(async move{
-        mqtt_connect(settings).await
+    //task to print messages
+    tokio::spawn(async move {
+        print_messages(rx).await
     });
 
-    //input loop
+    //task that handles mqtt connection
+    // tokio::spawn(async move{
+    //     mqtt_connect(settings, tx_mqtt).await
+    // });
+
+    //task that handles local input
     let handle = tokio::spawn(async move {
-        capture_user_input().await;
+        capture_user_input(tx_input, &username).await;
     });
-
     handle.await.unwrap();
 
 

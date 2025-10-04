@@ -16,6 +16,7 @@ pub struct Message {
     text: String,
 }
 
+
 impl Message {
     pub fn new(sender: String, text: String) -> Self {
         Message {
@@ -24,7 +25,23 @@ impl Message {
         }
     }
 
-    pub fn chat_print(&self, alignment: ChatAlignment) -> Result<(), TermError> {
+  
+}
+
+pub struct FullMessage {
+    message: Message,
+    alignment: ChatAlignment,
+}
+
+impl FullMessage {
+    pub fn new(messsage: Message, alignment: ChatAlignment) -> Self {
+        Self {
+            message: messsage,
+            alignment,
+        }
+    }
+
+  pub fn chat_print(&self) -> Result<(), TermError> {
         let (width, _) = match term_size::dimensions() {
             Some((w,h)) => (w,h),
             None => {
@@ -32,20 +49,21 @@ impl Message {
             },
         };
 
-        match alignment {
+        match self.alignment {
             ChatAlignment::Left => {
-                println!("{:<width$}", self.sender, width = width);
-                println!("\t{:<width$}", self.text, width = width);
+                println!("{:<width$}:", self.message.sender, width = width - 1);
+                println!("\t{:<width$}", self.message.text, width = width);
             },
             ChatAlignment::Right => {
-                println!("{:>width$}", self.sender, width = width);
-                println!("{:>width$}", self.text, width = width - 4);
+                println!("{:>width$}:", self.message.sender, width = width - 1);
+                println!("{:>width$}", self.message.text, width = width - 4);
             },
         }
         io::stdout().flush().unwrap(); // Ensure the message is printed immediately
 
         Ok(())
     }
+
 }
 
 // Implementing the Display trait for Message
@@ -55,3 +73,6 @@ impl core::fmt::Display for Message {
     }
 }
 
+pub async fn write_loop() {
+
+}

@@ -3,10 +3,10 @@ use std::{fmt::Alignment, io, net::SocketAddr, time::Duration};
 use config::Config;
 use log::{debug, info};
 use rumqttc::{EventLoop, Incoming, AsyncClient, MqttOptions, NetworkOptions, QoS};
-use tokio::{net::{self}, task, time};
-use chat_lib::chat::Message;
+use tokio::{net::{self}, sync::mpsc::Sender, task, time};
+use chat_lib::chat::{FullMessage, Message};
 
-pub async fn mqtt_connect(config: Config) -> ! {
+pub async fn mqtt_connect(config: Config, tx: Sender<FullMessage>) -> ! {
     let mqtt_server_address = config.get_string("mqtt_server_address").unwrap();
     let mqtt_server_port = config.get_int("mqtt_server_port").unwrap() as u16;
     let mqtt_server = format!("{}:{}", mqtt_server_address, mqtt_server_port);
@@ -37,7 +37,7 @@ pub async fn mqtt_connect(config: Config) -> ! {
         client.subscribe("chat/#", QoS::ExactlyOnce).await.unwrap();
 
         task::spawn(async move {
-            mqtt_eventloop(eventloop).await;
+            mqtt_eventloop(eventloop, tx).await;
         });
 
         task::spawn(async move {
@@ -50,7 +50,7 @@ pub async fn mqtt_connect(config: Config) -> ! {
     }
 }
 
-async fn mqtt_eventloop(mut eventloop: EventLoop) {
+async fn mqtt_eventloop(mut eventloop: EventLoop, tx: Sender<FullMessage>) {
     loop {
         let notification = match eventloop.poll().await {
             Ok(x) => x,
@@ -84,13 +84,17 @@ async fn mqtt_eventloop(mut eventloop: EventLoop) {
             }
         };
 
-        match message.chat_print(chat_lib::chat::ChatAlignment::Right) {
-            Ok(_) => (),
-            Err(e) => {
-                println!("{:?}", e);
-                continue;
-            },
-        }
+        let full_message = FullMessage::new(message, chat_lib::chat::ChatAlignment::Right);
+
+        tx.send(full_message).await.unwrap();
+
+        // match message.chat_print(chat_lib::chat::ChatAlignment::Right) {
+        //     Ok(_) => (),
+        //     Err(e) => {
+        //         println!("{:?}", e);
+        //         continue;
+        //     },
+        // }
     }
 }
 
