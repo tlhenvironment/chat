@@ -1,4 +1,4 @@
-use std::{process::Command, time::Duration};
+use std::{io::Write as _, process::Command, time::Duration};
 
 use tokio::{io::{self, AsyncBufReadExt as _, BufReader}, sync::{mpsc::{Receiver, Sender}, oneshot}};
 
@@ -42,6 +42,9 @@ pub async fn capture_user_input(tx_chat: Sender<FullMessage>, tx_local_chat: Sen
     loop {
         // Read the input line asynchronously
         if let Some(line) = lines.next_line().await.unwrap() {
+            print!("\x1B[F\x1B[K");
+            // Flush stdout to ensure the command is executed
+            std::io::stdout().flush().unwrap();
             let message = Message::new(username.to_string(), line, random_hash.to_string());
             let fullmessage = FullMessage::new(message.clone(), crate::chat::ChatAlignment::Right);
             tx_local_chat.send(message).await.unwrap();

@@ -12,42 +12,23 @@ pub async fn mqtt_connect(config: Config, tx: Sender<FullMessage>, rx: Receiver<
     let mqtt_server_port = config.get_int("mqtt_server_port").unwrap() as u16;
     let mqtt_server = format!("{}:{}", mqtt_server_address, mqtt_server_port);
     
-    println!("test: {}", mqtt_server);
+    debug!("test: {}", mqtt_server);
 
-    loop {
-    
-        // let socket_addrs: Vec<SocketAddr> = match net::lookup_host(&mqtt_server).await {
-        //     Ok(x) => {
-        //         x.collect()
-        //     },
-        //     Err(e) => {
-        //         println!("error: {:?}", e);
-        //         tokio::time::sleep(Duration::from_secs(1)).await;
-        //         continue
-        //     }
-        // };
-
-        // println!("result: {:?}", socket_addrs);
-
-        //connect to mqtt
-        let mut mqttoptions = MqttOptions::new(random_hash_state, &mqtt_server_address, mqtt_server_port);
+    let mut mqttoptions = MqttOptions::new(random_hash_state, &mqtt_server_address, mqtt_server_port);
         mqttoptions.set_keep_alive(Duration::from_secs(5));
 
-        let (mut client, mut eventloop) = AsyncClient::new(mqttoptions, 10);
+    let (mut client, mut eventloop) = AsyncClient::new(mqttoptions, 10);
 
-        client.subscribe("chat/#", QoS::ExactlyOnce).await.unwrap();
+    task::spawn(async move {
+        mqtt_eventloop(eventloop, tx).await;
+    });
 
-        task::spawn(async move {
-            mqtt_eventloop(eventloop, tx).await;
-        });
+    task::spawn(async move {
+        mqtt_client(client, rx).await;
+    });
 
-        task::spawn(async move {
-            mqtt_client(client, rx).await;
-        });
-
-        loop {
-            tokio::time::sleep(Duration::from_secs(5)).await;
-        }
+    loop {
+        tokio::time::sleep(Duration::from_secs(1)).await;
     }
 }
 
@@ -56,15 +37,16 @@ async fn mqtt_eventloop(mut eventloop: EventLoop, tx: Sender<FullMessage>) {
         let notification = match eventloop.poll().await {
             Ok(x) => x,
             Err(e) => {
-                println!("{:?}", e);
-                break
+                println!("Connection error: {}, \n Trying to reconnect...", e);
+                time::sleep(Duration::from_secs(5)).await;
+                continue
             },
         };
-        println!("Received = {:?}", notification);
+        debug!("Received = {:?}", notification);
 
         let packet = match notification {
             rumqttc::Event::Outgoing(outgoing) => {
-                println!("outgoing: {:?}", outgoing);
+                debug!("outgoing: {:?}", outgoing);
                 continue;
             },
             rumqttc::Event::Incoming(packet) => packet,
@@ -75,12 +57,12 @@ async fn mqtt_eventloop(mut eventloop: EventLoop, tx: Sender<FullMessage>) {
             _ => continue,
         };
 
-        println!("topic:{}", &publish.topic);
+        debug!("topic:{}", &publish.topic);
 
         let message: Message = match bincode::decode_from_slice(&publish.payload, bincode::config::standard()) {
             Ok(x) => x.0,
             Err(e) => {
-                println!("{}", e);
+                debug!("Deserialization error {}", e);
                 continue
             }
         };
@@ -100,18 +82,20 @@ async fn mqtt_eventloop(mut eventloop: EventLoop, tx: Sender<FullMessage>) {
 }
 
 async fn mqtt_client(client: AsyncClient, mut rx: Receiver<Message>) {
+    debug!("here");
+    client.subscribe("chat/#", QoS::ExactlyOnce).await.unwrap();
+
     loop {
         let message = rx.recv().await.unwrap();
+
+        debug!("mqtt client task received message {:?}", message);
+
         let encoded_message = bincode::encode_to_vec(message, bincode::config::standard()).unwrap();
 
-        client.publish("chat/1", rumqttc::QoS::AtMostOnce, false, encoded_message).await.unwrap();
-
-        // println!("test client");
-        // let message = Message::new("test".to_string(), "tt".to_string());
-
-        // let encoded_message = bincode::encode_to_vec(message, bincode::config::standard()).unwrap();
-        // client.publish("chat/1", rumqttc::QoS::AtMostOnce, false, encoded_message).await.unwrap();
-        // tokio::time::sleep(Duration::from_secs(5)).await;
+        match client.publish("chat/1", rumqttc::QoS::AtMostOnce, false, encoded_message).await {
+            Ok(_) => continue,
+            Err(_) => println!("-----OFFLINE, trying to reconnect-------"),
+        }
     }
 }
 

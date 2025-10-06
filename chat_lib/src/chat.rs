@@ -1,8 +1,6 @@
 use std::{ffi::os_str::Display, io::{self, Write as _}};
 
 use bincode::{Decode, Encode};
-use serde::{Deserialize, Serialize};
-
 use crate::{chat, terminal::TermError};
 
 #[derive(PartialEq)]

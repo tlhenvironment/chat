@@ -19,6 +19,17 @@ mod net;
 async fn main() {
     clear_terminal();        
 
+    // Initialize a logger with the default configuration
+    Builder::new()
+        .filter_level(log::LevelFilter::Debug) // Set desired log level
+        .init();
+
+    // Log messages
+    log::debug!("This is a debug message.");
+    log::info!("This is an info message.");
+    log::warn!("This is a warning message.");
+    log::error!("This is an error message.");
+    
     //read in settings
     let settings = Config::builder()
         .add_source(config::File::with_name("settings.toml"))
@@ -52,7 +63,7 @@ async fn main() {
     let (tx_local_chat, rx_local_chat) = mpsc::channel::<Message>(16);
 
     // //wait a bit to clear
-    tokio::time::sleep(Duration::from_secs(3)).await;
+    tokio::time::sleep(Duration::from_secs(1)).await;
     clear_terminal();
     tokio::time::sleep(Duration::from_secs(1)).await;
 
